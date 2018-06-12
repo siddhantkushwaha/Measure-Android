@@ -19,6 +19,14 @@ import java.net.URL;
 import java.net.URLEncoder;
 import java.util.ArrayList;
 
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Retrofit;
+import retrofit2.converter.gson.GsonConverterFactory;
+import retrofit2.http.GET;
+import retrofit2.http.Headers;
+import retrofit2.http.Query;
+
 public class PlacesAPI {
 
     private static final String TAG = PlacesAPI.class.getSimpleName();
@@ -28,7 +36,7 @@ public class PlacesAPI {
 
     private static final String PLACES_API_BASE = "https://maps.googleapis.com/maps/api/place";
     private static final String TYPE_AUTOCOMPLETE = "/autocomplete";
-    private static final String TYPE_DETAILS = "/details";
+    private static final String TYPE_DETAILS = "details";
     private static final String OUT_JSON = "/json";
 
     public PlacesAPI(Context context) {
@@ -36,7 +44,7 @@ public class PlacesAPI {
         this.API_KEY = this.context.getString(R.string.google_maps_key);
     }
 
-    public ArrayList<SearchedPlace> autocomplete (String input) {
+    public ArrayList<SearchedPlace> autocomplete(String input) {
 
         ArrayList<SearchedPlace> resultList = null;
         HttpURLConnection conn = null;
@@ -87,61 +95,20 @@ public class PlacesAPI {
         return resultList;
     }
 
-    public LatLng findPlaceDetails(String placeId) {
+    private interface GetPlaceDetailsApi {
 
-        LatLng latLng = null;
-        HttpURLConnection conn = null;
-        StringBuilder jsonResults = new StringBuilder();
-
-        try {
-            StringBuilder sb = new StringBuilder(PLACES_API_BASE + TYPE_DETAILS + OUT_JSON);
-            sb.append("?key=" + API_KEY);
-            sb.append("&placeid=" + URLEncoder.encode(placeId, "utf8"));
-
-            URL url = new URL(sb.toString());
-            conn = (HttpURLConnection) url.openConnection();
-            InputStreamReader in = new InputStreamReader(conn.getInputStream());
-
-            int read;
-            char[] buff = new char[1024];
-            while ((read = in.read(buff)) != -1) {
-                jsonResults.append(buff, 0, read);
-            }
-        } catch (MalformedURLException e) {
-            Log.e(TAG, "Error processing Places API URL", e);
-            return latLng;
-
-        } catch (IOException e) {
-            Log.e(TAG, "Error connecting to Places API", e);
-            return latLng;
-
-        } finally {
-            if (conn != null) {
-                conn.disconnect();
-            }
-        }
-
-        try {
-
-            JSONObject jsonObj = new JSONObject(jsonResults.toString());
-            JSONObject result = jsonObj.getJSONObject("result");
-            JSONObject geometry = result.getJSONObject("geometry");
-            JSONObject location = geometry.getJSONObject("location");
-            Double latitude = location.getDouble("lat");
-            Double longitude = location.getDouble("lng");
-
-            latLng = new LatLng(latitude, longitude);
-
-            return latLng;
-
-        } catch (JSONException e) {
-            Log.e(TAG, "Cannot process JSON results", e);
-            return latLng;
-        }
+        @Headers("Content-Type: application/json")
+        @GET(TYPE_DETAILS + OUT_JSON)
+        Call<Object> getPlaceDetailsById(@Query("placeid") String placeId, @Query("key") String key);
     }
-//
-//    private interface GetPlaceDetailsApi {
-//
-//
-//    }
+
+    public void getPlaceDetailsById(String placeId, Callback callback) {
+
+        Retrofit retrofit = new Retrofit.Builder().baseUrl(PLACES_API_BASE + "/")
+                .addConverterFactory(GsonConverterFactory.create()).build();
+
+        GetPlaceDetailsApi getPlaceDetailsApi = retrofit.create(GetPlaceDetailsApi.class);
+        Call call = getPlaceDetailsApi.getPlaceDetailsById(placeId, API_KEY);
+        call.enqueue(callback);
+    }
 }

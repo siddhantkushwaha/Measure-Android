@@ -53,6 +53,8 @@
                 android:layout_height="50dp"
                 android:background="@android:color/white"
                 android:hint="Type in your Location"
+                android:maxLines="1"
+                android:inputType="text"
                 android:paddingLeft="5dp" />
 
             <LinearLayout

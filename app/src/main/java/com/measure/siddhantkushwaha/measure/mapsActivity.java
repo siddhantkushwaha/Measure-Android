@@ -1,6 +1,7 @@
 package com.measure.siddhantkushwaha.measure;
 
 import android.annotation.SuppressLint;
+import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.Point;
@@ -13,7 +14,6 @@ import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
-import android.view.Menu;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.AdapterView;
@@ -39,6 +39,9 @@ import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
+import com.google.gson.Gson;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.google.maps.android.SphericalUtil;
 import com.measure.siddhantkushwaha.measure.adapter.PlacesAutoCompleteAdapter;
 import com.measure.siddhantkushwaha.measure.api.PlacesAPI;
@@ -47,6 +50,10 @@ import com.measure.siddhantkushwaha.measure.utitlities.AreaConverter;
 
 import java.util.ArrayList;
 import java.util.List;
+
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
 
 public class mapsActivity extends AppCompatActivity implements
         OnMapReadyCallback,
@@ -85,11 +92,13 @@ public class mapsActivity extends AppCompatActivity implements
     private AutoCompleteTextView autoCompleteTextView;
     private PlacesAutoCompleteAdapter placesAutoCompleteAdapter;
 
-    @SuppressLint("ClickableViewAccessibility")
+    @SuppressLint({"ClickableViewAccessibility", "ResourceType"})
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_maps);
+
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
 
         StrictMode.ThreadPolicy policy = new StrictMode.ThreadPolicy.Builder().permitAll().build();
         StrictMode.setThreadPolicy(policy);
@@ -103,7 +112,7 @@ public class mapsActivity extends AppCompatActivity implements
         View mapView = mapFragment.getView();
         if (mapView != null &&
                 mapView.findViewById(1) != null) {
-            View locationButton = ((View) mapView.findViewById(1).getParent()).findViewById(2);
+            @SuppressLint("ResourceType") View locationButton = ((View) mapView.findViewById(1).getParent()).findViewById(2);
             RelativeLayout.LayoutParams layoutParams = (RelativeLayout.LayoutParams)
                     locationButton.getLayoutParams();
             layoutParams.addRule(RelativeLayout.ALIGN_PARENT_TOP, 0);
@@ -194,9 +203,6 @@ public class mapsActivity extends AppCompatActivity implements
                 moveMapToLocation(searchedPlace);
             }
         });
-
-        PlacesAPI placesAPI = new PlacesAPI(this);
-        placesAPI.findPlaceDetails("ChIJbU60yXAWrjsR4E9-UejD3_g");
     }
 
     @Override
@@ -311,21 +317,41 @@ public class mapsActivity extends AppCompatActivity implements
         }
     }
 
-    private void moveMapToLocation(SearchedPlace searchedPlace) {
+    private void moveMapToLocation(final SearchedPlace searchedPlace) {
 
-        LatLng latLng = new PlacesAPI(mapsActivity.this).findPlaceDetails(searchedPlace.getPlace_id());
-        Log.i(TAG, latLng.toString());
+        PlacesAPI placesAPI = new PlacesAPI(this);
+        placesAPI.getPlaceDetailsById(searchedPlace.getPlace_id(), new Callback() {
+            @Override
+            public void onResponse(Call call, Response response) {
 
-        if (latLng == null)
-            return;
+                Gson gson = new Gson();
 
-        if(marker!=null)
-            marker.remove();
-        mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(latLng, 15));
-        MarkerOptions markerOptions = new MarkerOptions();
-        markerOptions.position(latLng);
-        markerOptions.title(searchedPlace.getDescription());
-        marker=mMap.addMarker(markerOptions);
+                JsonElement root = gson.toJsonTree(response.body());
+                JsonElement result = root.getAsJsonObject().get("result");
+                JsonElement geometry = result.getAsJsonObject().get("geometry");
+                JsonElement location = geometry.getAsJsonObject().get("location");
+                Double lat = location.getAsJsonObject().get("lat").getAsDouble();
+                Double lng = location.getAsJsonObject().get("lng").getAsDouble();
+
+                LatLng latLng = new LatLng(lat, lng);
+
+                Log.i(TAG, latLng.toString());
+
+                if (marker != null)
+                    marker.remove();
+
+                mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(latLng, 15));
+                MarkerOptions markerOptions = new MarkerOptions();
+                markerOptions.position(latLng);
+                markerOptions.title(searchedPlace.getDescription());
+                marker = mMap.addMarker(markerOptions);
+            }
+
+            @Override
+            public void onFailure(Call call, Throwable t) {
+
+            }
+        });
     }
 
     private void initiatePlotting() {
